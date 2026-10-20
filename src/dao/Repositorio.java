@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import model.Entidade;
 
-/** Contrato comum às persistências local e PostgreSQL. */
+/** Contrato comum às persistências local e MySQL. */
 public interface Repositorio extends AutoCloseable {
     <T extends Entidade> List<T> listar(Class<T> tipo);
     <T extends Entidade> T salvar(T entidade);

@@ -36,8 +36,10 @@ void close(); // sem checked exception
 ```
 
 - `ArquivoRepositorio(Path arquivo)` salva estado em arquivo local de forma atômica e transacional; `ArquivoRepositorio()` opera somente em memória para testes. Falha de leitura não pode apagar arquivo nem começar vazio silenciosamente.
-- `JdbcRepositorio(String url, String usuario, String senha)` usa PostgreSQL. Erros viram `PersistenciaException extends RuntimeException`. Não criar esquema automaticamente no início.
+- `JdbcRepositorio(String url, String usuario, String senha)` usa MySQL por Connector/J. Erros viram `PersistenciaException extends RuntimeException`. Não criar esquema automaticamente no início.
 - Toda mutação de negócio ocorre dentro de `transacao`; rollback restaura estado em arquivo/memória e desfaz transação JDBC.
+- No MySQL, as mutações usam `GET_LOCK` identificado pelo banco para serializar a validação e a gravação entre instâncias da aplicação. O bloqueio é liberado após commit ou rollback.
+- SQL requer MySQL 8.0.16+, tabelas InnoDB e `utf8mb4`. Colunas geradas com índices únicos impedem viagens em andamento com motorista ou veículo repetidos. O DDL não é transacional; scripts idempotentes preservam dados e não convertem esquemas antigos.
 
 ## Controller
 
@@ -61,4 +63,4 @@ Validação em `RegraNegocioException extends RuntimeException`. Campos obrigat�
 - DAO, SQL e testes de persistência: agente de persistência.
 - `app/`, `view/`, build/configuração e manual: agente principal.
 
-Modo padrão: arquivo `data/frota.dat`. Modo PostgreSQL: propriedade `app.modo=postgres` / variável `FROTA_MODO`. Credencial do administrador é configuração, sem tabela de usuários. Os scripts SQL criam exatamente cinco tabelas e preservam o histórico.
+Modo padrão: arquivo `data/frota.dat`. Modo MySQL: propriedade `app.modo=mysql` / variável `FROTA_MODO`. A URL padrão é `jdbc:mysql://localhost:3306/gestao_frota?connectionTimeZone=LOCAL`, com usuário `root` e senha vazia; credenciais locais ficam em `config.properties`, ignorado pelo Git. Credencial do administrador é configuração, sem tabela de usuários. Os scripts SQL criam exatamente cinco tabelas e preservam o histórico. `scripts/testar-mysql.ps1` executa a integração opcional em banco temporário isolado.

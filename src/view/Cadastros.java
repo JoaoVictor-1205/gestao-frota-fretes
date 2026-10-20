@@ -9,9 +9,9 @@ public final class Cadastros {
     public static CadastroPanel<Motorista> motoristas(FrotaController controller) {
         return new CadastroPanel<>(controller, Motorista.class, "Cadastro de motoristas", new String[]{"Código", "Nome", "CPF", "Categoria CNH", "Telefone", "Situação"}) {
             {
-                formulario.texto("nome", "Nome *", "").texto("cpf", "CPF *", "").texto("cnh", "CNH (11 dígitos) *", "")
+                formulario.texto("nome", "Nome *", "").mascarado("cpf", "CPF *", "", Mascaras.Tipo.CPF).mascarado("cnh", "CNH (11 dígitos) *", "", Mascaras.Tipo.CNH)
                     .escolha("categoria", "Categoria da CNH *", "A", "B", "AB", "C", "D", "E", "AC", "AD", "AE")
-                    .texto("telefone", "Telefone *", "").escolha("ativo", "Situação *", "Ativo", "Inativo");
+                    .mascarado("telefone", "Telefone *", "", Mascaras.Tipo.TELEFONE).escolha("ativo", "Situação *", "Ativo", "Inativo");
                 formulario.limpar();
             }
             protected Motorista ler() { return new Motorista(selecionado, formulario.texto("nome"), formulario.texto("cpf"), formulario.texto("cnh"), formulario.escolha("categoria"), formulario.texto("telefone"), formulario.escolha("ativo").equals("Ativo")); }
@@ -25,8 +25,8 @@ public final class Cadastros {
     public static CadastroPanel<Veiculo> veiculos(FrotaController controller) {
         return new CadastroPanel<>(controller, Veiculo.class, "Cadastro de veículos", new String[]{"Código", "Placa", "Modelo", "Ano", "Capacidade (kg)", "Situação"}) {
             {
-                formulario.texto("placa", "Placa *", "").texto("modelo", "Modelo *", "").texto("ano", "Ano *", String.valueOf(LocalDate.now().getYear()))
-                    .texto("capacidade", "Capacidade (kg) *", "").escolha("status", "Situação *", "Disponível", "Em viagem", "Em manutenção"); formulario.limpar();
+                formulario.mascarado("placa", "Placa *", "", Mascaras.Tipo.PLACA).texto("modelo", "Modelo *", "").mascarado("ano", "Ano *", String.valueOf(LocalDate.now().getYear()), Mascaras.Tipo.ANO)
+                    .decimal("capacidade", "Capacidade (kg) *").escolha("status", "Situação *", "Disponível", "Em viagem", "Em manutenção"); formulario.limpar();
             }
             protected Veiculo ler() { return new Veiculo(selecionado, formulario.texto("placa"), formulario.texto("modelo"), formulario.inteiro("ano", "Ano"), formulario.numero("capacidade", "Capacidade"), formulario.escolha("status")); }
             protected void preencher(Veiculo v) {
@@ -39,7 +39,8 @@ public final class Cadastros {
     public static CadastroPanel<Cliente> clientes(FrotaController controller) {
         return new CadastroPanel<>(controller, Cliente.class, "Cadastro de clientes", new String[]{"Código", "Nome / razão social", "CPF / CNPJ", "Telefone", "Endereço"}) {
             {
-                formulario.texto("nome", "Nome / razão social *", "").texto("documento", "CPF / CNPJ *", "").texto("telefone", "Telefone *", "").texto("endereco", "Endereço *", ""); formulario.limpar();
+                formulario.texto("nome", "Nome / razão social *", "").mascarado("documento", "CPF / CNPJ *", "", Mascaras.Tipo.CPF_CNPJ)
+                    .mascarado("telefone", "Telefone *", "", Mascaras.Tipo.TELEFONE).texto("endereco", "Endereço *", ""); formulario.limpar();
             }
             protected Cliente ler() { return new Cliente(selecionado, formulario.texto("nome"), formulario.texto("documento"), formulario.texto("telefone"), formulario.texto("endereco")); }
             protected void preencher(Cliente c) { formulario.preencher("nome", c.nome()); formulario.preencher("documento", Formatacao.documento(c.cpfCnpj())); formulario.preencher("telefone", Formatacao.telefone(c.telefone())); formulario.preencher("endereco", c.endereco()); }
@@ -52,8 +53,9 @@ public final class Cadastros {
                 formulario.vinculo("cliente", "Cliente *").vinculo("motorista", "Motorista *").vinculo("veiculo", "Veículo *")
                     .escolha("status", "Situação *", "Planejada", "Em andamento", "Concluída", "Cancelada")
                     .texto("origem", "Origem *", "").texto("destino", "Destino *", "")
-                    .texto("saida", "Saída (dd/mm/aaaa) *", Formatacao.data(LocalDate.now())).texto("chegada", "Chegada (dd/mm/aaaa)", "")
-                    .texto("valor", "Valor do frete (R$) *", ""); formulario.limpar();
+                    .mascarado("saida", "Saída (dd/mm/aaaa) *", Formatacao.data(LocalDate.now()), Mascaras.Tipo.DATA)
+                    .mascarado("chegada", "Chegada (dd/mm/aaaa)", "", Mascaras.Tipo.DATA)
+                    .decimal("valor", "Valor do frete (R$) *"); formulario.limpar();
             }
             protected void vinculos(DadosTela d) {
                 formulario.opcoes("cliente", d.clientes().stream().map(c -> new Formulario.Opcao(c.id(), c.nome())).toList());
@@ -73,9 +75,9 @@ public final class Cadastros {
     public static CadastroPanel<Manutencao> manutencoes(FrotaController controller) {
         return new CadastroPanel<>(controller, Manutencao.class, "Histórico de manutenção", new String[]{"Código", "Veículo", "Data", "Tipo", "Km", "Custo"}) {
             {
-                formulario.vinculo("veiculo", "Veículo *").texto("data", "Serviço (dd/mm/aaaa) *", Formatacao.data(LocalDate.now()))
-                    .escolha("tipo", "Tipo *", "Preventiva", "Corretiva").texto("km", "Quilometragem (km) *", "")
-                    .texto("custo", "Custo (R$) *", "").texto("descricao", "Descrição do serviço *", ""); formulario.limpar();
+                formulario.vinculo("veiculo", "Veículo *").mascarado("data", "Serviço (dd/mm/aaaa) *", Formatacao.data(LocalDate.now()), Mascaras.Tipo.DATA)
+                    .escolha("tipo", "Tipo *", "Preventiva", "Corretiva").numeroInteiro("km", "Quilometragem (km) *")
+                    .decimal("custo", "Custo (R$) *").texto("descricao", "Descrição do serviço *", ""); formulario.limpar();
             }
             protected void vinculos(DadosTela d) { formulario.opcoes("veiculo", d.veiculos().stream().map(v -> new Formulario.Opcao(v.id(), Formatacao.placa(v.placa()) + " — " + v.modelo())).toList()); }
             protected Manutencao ler() { return new Manutencao(selecionado, formulario.vinculo("veiculo"), formulario.data("data", false), formulario.escolha("tipo"), formulario.texto("descricao"), formulario.numero("custo", "Custo"), formulario.inteiro("km", "Quilometragem")); }

@@ -22,8 +22,8 @@ public final class Main {
             Repositorio repositorio = demo ? new ArquivoRepositorio(Path.of("data/demo.dat")) : switch (configuracao.modo()) {
                 case "arquivo" -> new ArquivoRepositorio(configuracao.arquivo());
                 case "memoria" -> new ArquivoRepositorio();
-                case "postgres" -> new JdbcRepositorio(configuracao.dbUrl(), configuracao.dbUsuario(), configuracao.dbSenha());
-                default -> throw new IllegalArgumentException("Modo inválido. Use arquivo, memoria ou postgres.");
+                case "mysql" -> new JdbcRepositorio(configuracao.dbUrl(), configuracao.dbUsuario(), configuracao.dbSenha());
+                default -> throw new IllegalArgumentException("Modo inválido. Use arquivo, memoria ou mysql.");
             };
             FrotaController controller = new FrotaController(repositorio);
             try {

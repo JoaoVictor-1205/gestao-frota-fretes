@@ -31,6 +31,21 @@ public final class Formulario extends JPanel {
         JTextField texto = new JTextField(); texto.setBorder(new CompoundBorder(new LineBorder(Tema.LINHA), new EmptyBorder(6, 9, 6, 9)));
         adicionar(chave, titulo, texto); padroes.put(chave, padrao); return this;
     }
+    public Formulario mascarado(String chave, String titulo, String padrao, Mascaras.Tipo tipo) {
+        texto(chave, titulo, padrao);
+        Mascaras.aplicar((JTextField) campos.get(chave), tipo);
+        return this;
+    }
+    public Formulario decimal(String chave, String titulo) {
+        texto(chave, titulo, "");
+        CamposNumericos.decimal((JTextField) campos.get(chave));
+        return this;
+    }
+    public Formulario numeroInteiro(String chave, String titulo) {
+        texto(chave, titulo, "");
+        CamposNumericos.inteiro((JTextField) campos.get(chave));
+        return this;
+    }
     public Formulario escolha(String chave, String titulo, String... opcoes) {
         JComboBox<String> combo = new JComboBox<>(opcoes); adicionar(chave, titulo, combo);
         if (opcoes.length > 0) padroes.put(chave, opcoes[0]); return this;
@@ -45,7 +60,7 @@ public final class Formulario extends JPanel {
     }
     public void preencher(String chave, Object valor) {
         JComponent campo = campos.get(chave);
-        if (campo instanceof JTextField texto) texto.setText(valor == null ? "" : valor.toString());
+        if (campo instanceof JTextField texto) Mascaras.preencher(texto, valor == null ? "" : valor.toString());
         else if (campo instanceof JComboBox<?> combo) {
             if (valor instanceof Integer id) {
                 for (int i = 0; i < combo.getItemCount(); i++) if (combo.getItemAt(i) instanceof Opcao opcao && opcao.id() == id) { combo.setSelectedIndex(i); return; }
@@ -66,7 +81,7 @@ public final class Formulario extends JPanel {
     }
     public void limpar() {
         campos.forEach((chave, campo) -> {
-            if (campo instanceof JTextField texto) texto.setText(Objects.toString(padroes.get(chave), ""));
+            if (campo instanceof JTextField texto) Mascaras.preencher(texto, Objects.toString(padroes.get(chave), ""));
             else if (campo instanceof JComboBox<?> combo) combo.setSelectedIndex(combo.getItemCount() > 0 ? 0 : -1);
         });
     }

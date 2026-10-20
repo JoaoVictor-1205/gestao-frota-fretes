@@ -16,7 +16,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 
-/** Regras compartilhadas pela interface, pelo modo local e pelo modo PostgreSQL. */
+/** Regras compartilhadas pela interface, pelo modo local e pelo modo MySQL. */
 public final class FrotaController implements AutoCloseable {
     public static final List<String> SITUACOES_VEICULO =
             List.of("Disponível", "Em viagem", "Em manutenção");

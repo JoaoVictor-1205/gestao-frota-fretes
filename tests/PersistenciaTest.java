@@ -16,6 +16,7 @@ import java.sql.DriverPropertyInfo;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -168,36 +169,54 @@ public final class PersistenciaTest {
         }
     }
 
-    /** Valida protocolo JDBC/transações; não substitui integração com PostgreSQL real. */
+    /** Valida protocolo JDBC/transações; não substitui integração com MySQL real. */
     private static void testarJdbcComDriverSimulado() throws Exception {
         DriverSimulado driver = new DriverSimulado();
         DriverManager.registerDriver(driver);
         try (Repositorio repositorio = new JdbcRepositorio(DriverSimulado.URL, "usuario", "senha")) {
             Motorista salvo = repositorio.salvar(new Motorista(0, "O'Connor; DROP TABLE motorista", "12345678901", "12345678901", "D", "11999999999", true));
-            verificar(salvo.id() == 42, "JDBC retorna ID gerado por RETURNING");
+            verificar(salvo.id() == 42, "JDBC retorna ID gerado pelo MySQL");
             Chamada insert = driver.chamadas.stream().filter(c -> c.sql.startsWith("INSERT")).findFirst().orElseThrow();
             verificar(!insert.sql.contains("O'Connor") && insert.parametros.get(1).equals(salvo.nome()), "JDBC parametriza conteúdo de texto");
+            verificar(insert.chavesGeradas && !insert.sql.contains("RETURNING"), "Inclusão solicita chaves geradas pelo JDBC");
             verificar(driver.commits == 1 && driver.rollbacks == 0 && driver.autoCommit, "JDBC confirma e restaura autoCommit");
             verificar(driver.isolamento == Connection.TRANSACTION_READ_COMMITTED, "Isolamento JDBC explícito para validações após trava");
-            verificar(driver.chamadas.stream().anyMatch(c -> c.sql.contains("pg_advisory_xact_lock")), "Transação usa trava entre instâncias");
+            verificar(driver.propriedades.getProperty("connectTimeout").equals("10000")
+                    && driver.propriedades.getProperty("socketTimeout").equals("30000"), "Timeouts MySQL são expressos em milissegundos");
+            verificar(driver.chamadas.stream().anyMatch(c -> c.sql.contains("GET_LOCK")), "Transação usa trava entre instâncias");
+            verificar(driver.chamadas.stream().anyMatch(c -> c.sql.contains("RELEASE_LOCK")), "Commit libera trava da conexão MySQL");
             repositorio.salvar(salvo);
             Chamada update = driver.chamadas.stream().filter(c -> c.sql.startsWith("UPDATE")).findFirst().orElseThrow();
-            verificar(update.parametros.get(7).equals(42) && update.sql.endsWith("WHERE id=? RETURNING id"), "Edição JDBC vincula ID no WHERE");
+            verificar(update.parametros.get(7).equals(42) && update.sql.endsWith("WHERE id=?"), "Edição JDBC vincula ID no WHERE");
+            driver.mutacaoSemMudanca = true;
+            verificar(repositorio.salvar(salvo).equals(salvo), "Edição sem alterações aceita registro existente");
+            verificar(driver.chamadas.stream().anyMatch(c -> c.sql.startsWith("SELECT id FROM motorista WHERE id=?")), "Zero alterações exige conferir a existência do registro");
+            driver.registroExiste = false;
+            esperar(PersistenciaException.class, () -> repositorio.salvar(salvo));
+            driver.mutacaoSemMudanca = false;
+            driver.registroExiste = true;
             int commits = driver.commits;
+            int rollbacks = driver.rollbacks;
             esperar(IllegalStateException.class, () -> repositorio.transacao(() -> { repositorio.excluir(Motorista.class, 42); throw new IllegalStateException("falha simulada"); }));
-            verificar(driver.rollbacks == 1 && driver.commits == commits && driver.autoCommit, "JDBC desfaz transação que falhou");
+            verificar(driver.rollbacks == rollbacks + 1 && driver.commits == commits && driver.autoCommit, "JDBC desfaz transação que falhou");
             driver.falharMutacao = true;
             esperar(PersistenciaException.class, () -> repositorio.salvar(motorista("12345678901", "12345678901")));
-            verificar(driver.rollbacks == 2 && driver.commits == commits, "Violação SQL causa rollback");
+            verificar(driver.rollbacks == rollbacks + 2 && driver.commits == commits, "Violação SQL MySQL causa rollback");
             esperar(PersistenciaException.class, () -> repositorio.transacao(() -> {
                 repositorio.salvar(motorista("99999999999", "99999999999"));
                 try { repositorio.salvar(null); } catch (PersistenciaException esperada) { /* Callback tentou ignorar falha. */ }
                 return null;
             }));
-            verificar(driver.rollbacks == 3 && driver.commits == commits, "JDBC também impede commit parcial após erro capturado");
+            verificar(driver.rollbacks == rollbacks + 3 && driver.commits == commits, "JDBC também impede commit parcial após erro capturado");
+            long travasAntes = driver.chamadas.stream().filter(c -> c.sql.contains("GET_LOCK")).count();
+            repositorio.transacao(() -> repositorio.transacao(() -> null));
+            verificar(driver.chamadas.stream().filter(c -> c.sql.contains("GET_LOCK")).count() == travasAntes + 1,
+                    "Transações aninhadas adquirem a trava uma única vez");
+            verificar(driver.chamadas.stream().filter(c -> c.sql.contains("GET_LOCK")).count()
+                    == driver.chamadas.stream().filter(c -> c.sql.contains("RELEASE_LOCK")).count(), "Commit e rollback liberam todas as travas adquiridas");
         } finally { DriverManager.deregisterDriver(driver); }
         verificar(driver.fechado, "JDBC encerra conexão");
-        esperar(PersistenciaException.class, () -> new JdbcRepositorio("jdbc:mysql://localhost/frota", "", ""));
+        esperar(PersistenciaException.class, () -> new JdbcRepositorio("jdbc:postgresql://localhost/frota", "", ""));
     }
 
     private static Motorista motorista(String cpf, String cnh) { return new Motorista(0, "Motorista", cpf, cnh, "D", "11999999999", true); }
@@ -214,16 +233,19 @@ public final class PersistenciaTest {
 
     private static final class Chamada {
         private final String sql;
+        private final boolean chavesGeradas;
         private final Map<Integer, Object> parametros = new LinkedHashMap<>();
-        private Chamada(String sql) { this.sql = sql; }
+        private Chamada(String sql, boolean chavesGeradas) { this.sql = sql; this.chavesGeradas = chavesGeradas; }
     }
     private static final class DriverSimulado implements Driver {
-        private static final String URL = "jdbc:postgresql://teste-local-simulado/gestao_frota";
+        private static final String URL = "jdbc:mysql://teste-local-simulado/gestao_frota";
         private final List<Chamada> chamadas = new ArrayList<>();
+        private Properties propriedades;
         private int commits, rollbacks, isolamento;
-        private boolean fechado, autoCommit = true, falharMutacao;
+        private boolean fechado, autoCommit = true, falharMutacao, mutacaoSemMudanca, registroExiste = true;
         @Override public Connection connect(String url, Properties propriedades) {
             if (!acceptsURL(url)) return null;
+            this.propriedades = propriedades;
             return (Connection) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[] { Connection.class }, (proxy, metodo, args) -> {
                 return switch (metodo.getName()) {
                     case "setAutoCommit" -> { autoCommit = (boolean) args[0]; yield null; }
@@ -233,32 +255,35 @@ public final class PersistenciaTest {
                     case "rollback" -> { rollbacks++; yield null; }
                     case "close" -> { fechado = true; yield null; }
                     case "isClosed" -> fechado;
-                    case "prepareStatement" -> preparar((String) args[0]);
+                    case "prepareStatement" -> preparar((String) args[0], args.length > 1 && args[1].equals(Statement.RETURN_GENERATED_KEYS));
                     default -> throw new UnsupportedOperationException(metodo.getName());
                 };
             });
         }
-        private PreparedStatement preparar(String sql) {
-            Chamada chamada = new Chamada(sql); chamadas.add(chamada);
+        private PreparedStatement preparar(String sql, boolean chavesGeradas) {
+            Chamada chamada = new Chamada(sql, chavesGeradas); chamadas.add(chamada);
             return (PreparedStatement) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[] { PreparedStatement.class }, (proxy, metodo, args) -> {
                 if (metodo.getName().startsWith("set")) { chamada.parametros.put((Integer) args[0], args[1]); return null; }
                 return switch (metodo.getName()) {
-                    case "executeQuery" -> {
-                        if (falharMutacao && (sql.startsWith("INSERT") || sql.startsWith("UPDATE"))) { falharMutacao = false; throw new SQLException("duplicidade simulada", "23505"); }
-                        yield resultado();
+                    case "executeQuery" -> resultado(sql.contains("GET_LOCK") || sql.contains("RELEASE_LOCK") ? 1 : 42,
+                            !sql.startsWith("SELECT id FROM") || registroExiste);
+                    case "getGeneratedKeys" -> resultado(42, true);
+                    case "executeUpdate" -> {
+                        if (falharMutacao && (sql.startsWith("INSERT") || sql.startsWith("UPDATE"))) { falharMutacao = false; throw new SQLException("duplicidade simulada", "23000", 1062); }
+                        yield sql.startsWith("UPDATE") && mutacaoSemMudanca ? 0 : 1;
                     }
-                    case "executeUpdate" -> 1;
                     case "execute" -> true;
                     case "close" -> null;
                     default -> throw new UnsupportedOperationException(metodo.getName());
                 };
             });
         }
-        private ResultSet resultado() {
+        private ResultSet resultado(int valor, boolean existe) {
             boolean[] lido = { false };
             return (ResultSet) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[] { ResultSet.class }, (proxy, metodo, args) -> switch (metodo.getName()) {
-                case "next" -> { boolean proximo = !lido[0]; lido[0] = true; yield proximo; }
-                case "getInt" -> 42;
+                case "next" -> { boolean proximo = existe && !lido[0]; lido[0] = true; yield proximo; }
+                case "getInt" -> valor;
+                case "wasNull" -> false;
                 case "close" -> null;
                 default -> throw new UnsupportedOperationException(metodo.getName());
             });

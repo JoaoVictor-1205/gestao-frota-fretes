@@ -24,8 +24,8 @@ public final class RelatorioPanel extends JPanel {
     public RelatorioPanel(FrotaController controller) {
         super(new BorderLayout(0, 16)); this.controller = controller; setOpaque(false);
         JPanel cartao = Tema.cartao("Relatório de fretes por período");
-        filtros.texto("inicio", "Data inicial (dd/mm/aaaa) *", Formatacao.data(LocalDate.now().withDayOfMonth(1)))
-            .texto("fim", "Data final (dd/mm/aaaa) *", Formatacao.data(LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth())))
+        filtros.mascarado("inicio", "Data inicial (dd/mm/aaaa) *", Formatacao.data(LocalDate.now().withDayOfMonth(1)), Mascaras.Tipo.DATA)
+            .mascarado("fim", "Data final (dd/mm/aaaa) *", Formatacao.data(LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth())), Mascaras.Tipo.DATA)
             .vinculo("cliente", "Cliente (opcional)"); filtros.limpar();
         JPanel conteudo = new JPanel(new BorderLayout()); conteudo.setOpaque(false); conteudo.add(filtros, BorderLayout.CENTER);
         JPanel acoes = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0)); acoes.setOpaque(false); acoes.add(gerar); acoes.add(limpar);

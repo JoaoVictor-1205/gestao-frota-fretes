@@ -29,8 +29,8 @@ public final class Configuracao {
 
     public String modo() { return valor("app.modo", "FROTA_MODO", "arquivo").trim().toLowerCase(Locale.ROOT); }
     public Path arquivo() { return Path.of(valor("app.arquivo", "FROTA_ARQUIVO", "data/frota.dat")); }
-    public String dbUrl() { return valor("db.url", "FROTA_DB_URL", "jdbc:postgresql://localhost:5432/gestao_frota"); }
-    public String dbUsuario() { return valor("db.usuario", "FROTA_DB_USUARIO", "postgres"); }
+    public String dbUrl() { return valor("db.url", "FROTA_DB_URL", "jdbc:mysql://localhost:3306/gestao_frota?connectionTimeZone=LOCAL"); }
+    public String dbUsuario() { return valor("db.usuario", "FROTA_DB_USUARIO", "root"); }
     public String dbSenha() { return valor("db.senha", "FROTA_DB_SENHA", ""); }
     public boolean senhaPadrao() { return valor("admin.senha", "FROTA_ADMIN_SENHA", "admin123").equals("admin123"); }
     public boolean usuarioPadrao() { return valor("admin.usuario", "FROTA_ADMIN_USUARIO", "administrador").equals("administrador"); }
